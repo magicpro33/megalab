@@ -13,6 +13,7 @@ Current rules (since April 8, 2025):
 Run:  streamlit run mega_millions_lab.py
 """
 
+import hashlib
 import io
 import math
 import secrets
@@ -150,6 +151,46 @@ def quantum_pick() -> tuple[list[int], int, str]:
         return w, m, "Quantum source unreachable — crypto-secure fallback"
 
 
+def intention_pick(intention: str) -> tuple[list[int], int, str]:
+    """Randonautica-style intention generation. Your intention text is
+    SHA-256 hashed and XOR-mixed with quantum bytes fetched at the moment
+    you commit the intention — so the output deterministically depends on
+    BOTH what you typed and the quantum state at that instant. (Honesty
+    note: physics has no evidence intention steers quantum outcomes;
+    the mixing keeps the distribution perfectly uniform either way.)"""
+    seed = hashlib.sha256(intention.strip().lower().encode()).digest()
+    src = "ANU Quantum RNG ⊕ intention hash"
+    try:
+        r = requests.get(
+            "https://qrng.anu.edu.au/API/jsonI.php",
+            params={"length": 64, "type": "uint8"},
+            timeout=6,
+        )
+        r.raise_for_status()
+        qbytes = bytes(r.json()["data"])
+    except Exception:
+        qbytes = secrets.token_bytes(64)
+        src = "CSPRNG ⊕ intention hash (quantum source offline)"
+
+    mixed = bytes(q ^ seed[i % 32] for i, q in enumerate(qbytes))
+    # stretch the entropy pool so rejection sampling can't run dry
+    pool = list(hashlib.sha512(mixed).digest() + hashlib.sha512(mixed[::-1]).digest() + mixed)
+
+    def draw(n: int) -> int:
+        limit = 256 - (256 % n)
+        while pool:
+            b = pool.pop()
+            if b < limit:
+                return b % n
+        raise RuntimeError("entropy pool exhausted")
+
+    whites: set[int] = set()
+    while len(whites) < 5:
+        whites.add(draw(70) + 1)
+    mega = draw(24) + 1
+    return sorted(whites), mega, src
+
+
 def never_drawn_pick(history_sets: set[frozenset], generator) -> tuple[list[int], int, int]:
     """Generate until the 5-white-ball combination has never appeared in the
     historical file. (With ~2,500 draws out of 12.6M possible white-ball
@@ -210,9 +251,65 @@ def check_against_history(df: pd.DataFrame, whites: list[int], mega: int) -> pd.
 # ----------------------------------------------------------------------------
 # UI
 # ----------------------------------------------------------------------------
-st.set_page_config(page_title="Mega Millions Analysis Lab", page_icon="🎰", layout="wide")
-st.title("🎰 Mega Millions Analysis Lab")
-st.caption("Frequency analytics · history checker · quantum picks · exact odds engine")
+st.set_page_config(page_title="Mega Millions Analysis Lab | AI Upscale", page_icon="🎰", layout="wide")
+
+# ---- AI Upscale "Midnight Warmth" branding ---------------------------------
+st.markdown("""
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
+
+html, body, [class*="css"], .stMarkdown, p, li, label {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+h1, h2, h3, h4, [data-testid="stMetricValue"] {
+    font-family: 'Rajdhani', sans-serif !important;
+    letter-spacing: 0.02em;
+}
+h1 { color: #F5A623 !important; }
+h2, h3 { color: #F4EDE4 !important; }
+[data-testid="stMetricValue"] { color: #F5A623 !important; }
+.stTabs [data-baseweb="tab-list"] { gap: 6px; }
+.stTabs [data-baseweb="tab"] {
+    background: #13203A; border-radius: 8px 8px 0 0;
+    font-family: 'Rajdhani', sans-serif; font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+    background: #F5A623 !important; color: #0A1220 !important;
+}
+.stButton > button {
+    font-family: 'Rajdhani', sans-serif; font-weight: 600;
+    border: 1px solid #F5A623;
+}
+.aiu-header {
+    display: flex; align-items: center; gap: 18px;
+    padding: 6px 0 14px 0; border-bottom: 1px solid #24365A;
+    margin-bottom: 10px;
+}
+.aiu-header img { height: 52px; }
+.aiu-footer {
+    margin-top: 40px; padding-top: 14px; border-top: 1px solid #24365A;
+    font-size: 0.85rem; color: #8FA3C8;
+}
+.aiu-footer a, .aiu-header a { color: inherit; text-decoration: none; }
+.aiu-footer a:hover { color: #F5A623; }
+</style>
+
+<div class="aiu-header">
+  <a href="https://aiupscalellc.netlify.app/" target="_blank" rel="noopener">
+    <img src="https://aiupscalellc.netlify.app/logo.svg" alt="AI Upscale LLC">
+  </a>
+  <div>
+    <div style="font-family:'Rajdhani',sans-serif;font-size:1.9rem;font-weight:700;color:#F5A623;line-height:1;">
+      🎰 MEGA MILLIONS ANALYSIS LAB
+    </div>
+    <div style="color:#8FA3C8;font-size:0.9rem;">
+      Frequency analytics · history checker · quantum picks · exact odds engine — an
+      <a href="https://aiupscalellc.netlify.app/" target="_blank" rel="noopener"
+         style="color:inherit;text-decoration:none;">AI Upscale LLC</a> tool
+    </div>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
 with st.sidebar:
     st.header("Data")
@@ -310,6 +407,27 @@ with tab_gen:
         bits.append("full 6-number combo previously won the jackpot(!)" if combo_seen
                     else "full combo never drawn ✅")
         st.caption(" · ".join(bits))
+
+    st.markdown("---")
+    st.subheader("🧿 Intention Generator (full Randonautica mode)")
+    st.caption(
+        "Type your intention, take a breath, and commit. Your intention is SHA-256 hashed and "
+        "XOR-mixed with quantum bytes pulled **at the exact moment you press the button** — the "
+        "numbers literally depend on both what you wrote and the quantum state of that instant. "
+        "(Straight talk: there's no evidence intention biases quantum outcomes, and the mix stays "
+        "perfectly uniform — but as a ritual for choosing numbers, nothing beats it.)"
+    )
+    ic1, ic2 = st.columns([3, 1])
+    intention = ic1.text_input("Your intention", placeholder="e.g., abundance for my family",
+                               label_visibility="collapsed")
+    if ic2.button("🧿 Commit intention", type="primary", use_container_width=True):
+        if not intention.strip():
+            st.warning("Set an intention first — even one word.")
+        else:
+            w, m, src = intention_pick(intention)
+            render_pick(w, m, src)
+            st.caption(f'Intention: *"{intention.strip()}"* — same intention + different quantum moment = different numbers.')
+    st.markdown("---")
 
     g1, g2 = st.columns(2)
     with g1:
@@ -430,3 +548,10 @@ with tab_odds:
         "variance means you'd need millions of lifetimes to realize it.\n"
         "- The house edge here (~40–75%) is far worse than any casino table game. Budget accordingly."
     )
+
+st.markdown(
+    '<div class="aiu-footer">Built by '
+    '<a href="https://aiupscalellc.netlify.app/" target="_blank" rel="noopener">AI Upscale LLC</a>'
+    ' · Columbia, SC · For entertainment and education — play responsibly.</div>',
+    unsafe_allow_html=True,
+)
