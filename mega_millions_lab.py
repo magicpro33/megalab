@@ -285,7 +285,7 @@ h2, h3 { color: #F4EDE4 !important; }
     padding: 6px 0 14px 0; border-bottom: 1px solid #24365A;
     margin-bottom: 10px;
 }
-.aiu-header img { height: 52px; }
+.aiu-header img { height: 104px; }
 .aiu-footer {
     margin-top: 40px; padding-top: 14px; border-top: 1px solid #24365A;
     font-size: 0.85rem; color: #8FA3C8;
@@ -343,8 +343,8 @@ mega_freq = Counter(df["Mega Ball"])
 history_sets = set(df_all["white_set"])
 full_combo_set = set(zip(df_all["white_set"], df_all["Mega Ball"]))
 
-tab_freq, tab_gen, tab_check, tab_odds = st.tabs(
-    ["📊 Frequency Analysis", "🎲 Number Generators", "🔍 Check My Numbers", "🧮 Odds & Expected Value"]
+tab_gen, tab_picks, tab_freq, tab_check, tab_odds = st.tabs(
+    ["🎲 Number Generators", "💾 My Picks", "📊 Frequency Analysis", "🔍 Check My Numbers", "🧮 Odds & Expected Value"]
 )
 
 # --------------------------- FREQUENCY --------------------------------------
@@ -394,7 +394,10 @@ with tab_gen:
     st.markdown("All generators follow official rules: **5 unique whites 1–70 + Mega Ball 1–24**, "
                 "uniform via rejection sampling. Every pick is checked against your full history file.")
 
-    def render_pick(whites, mega, source, attempts=None):
+    if "picks" not in st.session_state:
+        st.session_state.picks = []
+
+    def render_pick(whites, mega, source, attempts=None, intention=None):
         balls = " ".join(f"`{w:02d}`" for w in whites)
         st.markdown(f"### {balls}  —  🟡 MB `{mega:02d}`")
         combo_seen = (frozenset(whites), mega) in full_combo_set
@@ -407,6 +410,16 @@ with tab_gen:
         bits.append("full 6-number combo previously won the jackpot(!)" if combo_seen
                     else "full combo never drawn ✅")
         st.caption(" · ".join(bits))
+        st.session_state.picks.append({
+            "#": len(st.session_state.picks) + 1,
+            "Generated At": pd.Timestamp.now().strftime("%m/%d/%Y %I:%M:%S %p"),
+            "White Balls": " ".join(f"{w:02d}" for w in whites),
+            "Mega Ball": mega,
+            "Source": source,
+            "Intention": intention or "",
+            "Never-Drawn 5-Ball Set": "No" if whiteset_seen else "Yes",
+        })
+        st.toast("Pick saved to 💾 My Picks", icon="💾")
 
     st.markdown("---")
     st.subheader("🧿 Intention Generator (full Randonautica mode)")
@@ -425,7 +438,7 @@ with tab_gen:
             st.warning("Set an intention first — even one word.")
         else:
             w, m, src = intention_pick(intention)
-            render_pick(w, m, src)
+            render_pick(w, m, src, intention=intention.strip())
             st.caption(f'Intention: *"{intention.strip()}"* — same intention + different quantum moment = different numbers.')
     st.markdown("---")
 
@@ -470,6 +483,28 @@ with tab_gen:
         if st.button("Generate cold pick"):
             w, m = hot_cold_pick(white_freq, mega_freq, "cold")
             render_pick(w, m, "Frequency-weighted (cold)")
+
+# --------------------------- MY PICKS ---------------------------------------
+with tab_picks:
+    st.subheader("💾 Every number you've generated this session")
+    if "picks" not in st.session_state or not st.session_state.picks:
+        st.info("No picks yet — head to 🎲 Number Generators. Every pick you generate is saved here automatically.")
+    else:
+        picks_df = pd.DataFrame(st.session_state.picks)
+        st.dataframe(picks_df, hide_index=True, use_container_width=True)
+        d1, d2, d3 = st.columns([1, 1, 2])
+        d1.download_button(
+            "⬇️ Download picks CSV",
+            picks_df.to_csv(index=False).encode(),
+            file_name=f"my_mega_millions_picks_{date.today():%Y%m%d}.csv",
+            mime="text/csv",
+            type="primary",
+        )
+        if d2.button("🗑️ Clear all picks"):
+            st.session_state.picks = []
+            st.rerun()
+        d3.caption(f"{len(picks_df)} pick(s) saved. Session-based — download the CSV before closing the "
+                   "browser tab or the list resets.")
 
 # --------------------------- CHECKER ----------------------------------------
 with tab_check:
