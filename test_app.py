@@ -25,18 +25,16 @@ def main() -> None:
     at = _run(AppTest.from_file("sc_lottery_lab.py"))
     print("ok  initial render")
 
-    titles = [str(t) for t in at.title] + [str(h) for h in at.header] + [str(s) for s in at.subheader]
-    print("  widgets", len(at.button), "buttons,", len(at.selectbox), "selectboxes")
+    print("  widgets", len(at.button), "buttons")
 
     # Switch through every game and confirm no exception.
-    sb = at.selectbox[0]
     for game in GAMES:
-        sb.set_value(game)
+        at.session_state["game_pick"] = game
         _run(at)
         print(f"ok  switch {game}")
 
     # Mega Millions: generate a secure pick and check history.
-    sb.set_value("Mega Millions")
+    at.session_state["game_pick"] = "Mega Millions"
     _run(at)
     labels = [b.label for b in at.button]
     secure = next(b for b in at.button if b.label == "Generate secure pick")
@@ -57,11 +55,11 @@ def main() -> None:
         print("ok  virgin combo", at.session_state["picks"][-1]["Numbers"])
 
     # Digit game odds widgets
-    sb.set_value("Pick 3 + FIREBALL")
+    at.session_state["game_pick"] = "Pick 3 + FIREBALL"
     _run(at)
     print("ok  pick 3 render")
 
-    sb.set_value("CASH POP")
+    at.session_state["game_pick"] = "CASH POP"
     _run(at)
     print("ok  cash pop render")
 

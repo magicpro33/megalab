@@ -60,7 +60,9 @@ st.markdown(
     """
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600&display=swap');
-html, body, [class*="css"], .stMarkdown, p, li, label { font-family: 'Plus Jakarta Sans', sans-serif; }
+html, body, [data-testid="stAppViewContainer"], .stMarkdown, p, li, label {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+}
 h1, h2, h3, h4, [data-testid="stMetricValue"] { font-family: 'Rajdhani', sans-serif !important; letter-spacing: 0.02em; }
 h1 { color: #F5A623 !important; }
 h2, h3 { color: #F4EDE4 !important; }
@@ -94,7 +96,17 @@ h2, h3 { color: #F4EDE4 !important; }
     unsafe_allow_html=True,
 )
 
-game_name = st.selectbox("🎯 Select game", list(GAMES.keys()), key="game_select")
+# Pills avoid the Streamlit selectbox popover that can cover the app after a change.
+st.session_state.pop("game_select", None)
+_GAME_NAMES = list(GAMES.keys())
+game_name = st.pills(
+    "🎯 Select game",
+    _GAME_NAMES,
+    default=_GAME_NAMES[0],
+    key="game_pick",
+)
+if game_name not in GAMES:
+    game_name = _GAME_NAMES[0]
 g = GAMES[game_name]
 st.caption(g["note"])
 gkey = game_name.replace(" ", "_")
@@ -104,7 +116,7 @@ with st.sidebar:
     up = st.file_uploader(
         f"Upload {game_name} history CSV",
         type="csv",
-        key=f"upload_{gkey}",
+        key="history_csv",
         help=(
             "Needs a date column and a winning-numbers column "
             "(space, dash, or comma separated). Mega Millions history is preloaded."
