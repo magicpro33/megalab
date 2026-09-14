@@ -1,69 +1,87 @@
-"""Streamlit AppTest smoke checks for every game and tab."""
+"""Backtest: every game × every page, plus generate / check / odds."""
 
 from __future__ import annotations
 
 from streamlit.testing.v1 import AppTest
 
-GAMES = [
-    "Mega Millions",
-    "Powerball",
-    "Palmetto Cash 5",
-    "Pick 4 + FIREBALL",
-    "Pick 3 + FIREBALL",
-    "CASH POP",
+from lottery_core import GAMES
+
+PAGES = [
+    "Number Generators",
+    "My Picks",
+    "Frequency Analysis",
+    "Check My Numbers",
+    "Odds & Expected Value",
 ]
 
 
-def _run(at: AppTest) -> AppTest:
-    at.run(timeout=30)
+def run(at: AppTest) -> AppTest:
+    at.run(timeout=45)
     if at.exception:
         raise AssertionError(at.exception)
     return at
 
 
+def set_nav(at: AppTest, game: str, page: str) -> AppTest:
+    at.session_state["nav_game"] = game
+    at.session_state["nav_page"] = page
+    return run(at)
+
+
 def main() -> None:
-    at = _run(AppTest.from_file("sc_lottery_lab.py"))
+    at = run(AppTest.from_file("sc_lottery_lab.py"))
     print("ok  initial render")
 
-    print("  widgets", len(at.button), "buttons")
-
-    # Switch through every game and confirm no exception.
     for game in GAMES:
-        at.session_state["game_pick"] = game
-        _run(at)
-        print(f"ok  switch {game}")
+        for page in PAGES:
+            set_nav(at, game, page)
+            print(f"ok  {game} / {page}")
 
-    # Mega Millions: generate a secure pick and check history.
-    at.session_state["game_pick"] = "Mega Millions"
-    _run(at)
-    labels = [b.label for b in at.button]
+    set_nav(at, "Mega Millions", "Number Generators")
     secure = next(b for b in at.button if b.label == "Generate secure pick")
     secure.click()
-    _run(at)
+    run(at)
     assert at.session_state["picks"], "secure pick was not saved"
-    print("ok  secure pick saved:", at.session_state["picks"][-1]["Numbers"])
+    print("ok  MM secure pick", at.session_state["picks"][-1]["Numbers"])
 
-    check = next(b for b in at.button if b.label == "Check history")
-    check.click()
-    _run(at)
-    print("ok  check history")
+    virgin = next(b for b in at.button if b.label == "Generate virgin combination")
+    virgin.click()
+    run(at)
+    print("ok  MM virgin", at.session_state["picks"][-1]["Numbers"])
 
-    virgin = next((b for b in at.button if b.label == "Generate virgin combination"), None)
-    if virgin:
-        virgin.click()
-        _run(at)
-        print("ok  virgin combo", at.session_state["picks"][-1]["Numbers"])
+    set_nav(at, "Mega Millions", "Check My Numbers")
+    next(b for b in at.button if b.label == "Check history").click()
+    run(at)
+    print("ok  MM check history")
 
-    # Digit game odds widgets
-    at.session_state["game_pick"] = "Pick 3 + FIREBALL"
-    _run(at)
-    print("ok  pick 3 render")
+    set_nav(at, "Mega Millions", "Odds & Expected Value")
+    print("ok  MM odds stay up")
 
-    at.session_state["game_pick"] = "CASH POP"
-    _run(at)
-    print("ok  cash pop render")
+    set_nav(at, "Powerball", "Odds & Expected Value")
+    print("ok  Powerball odds")
 
-    print("\nAppTest smoke checks passed")
+    set_nav(at, "Palmetto Cash 5", "Odds & Expected Value")
+    print("ok  Palmetto odds")
+
+    set_nav(at, "Pick 3 + FIREBALL", "Odds & Expected Value")
+    print("ok  Pick 3 odds")
+
+    set_nav(at, "Pick 4 + FIREBALL", "Number Generators")
+    next(b for b in at.button if b.label == "Generate secure pick").click()
+    run(at)
+    print("ok  Pick 4 pick", at.session_state["picks"][-1]["Numbers"])
+
+    set_nav(at, "CASH POP", "Number Generators")
+    next(b for b in at.button if b.label == "Generate secure pick").click()
+    run(at)
+    print("ok  CASH POP pick", at.session_state["picks"][-1]["Numbers"])
+
+    set_nav(at, "Powerball", "Frequency Analysis")
+    set_nav(at, "Mega Millions", "Frequency Analysis")
+    set_nav(at, "CASH POP", "My Picks")
+    print("ok  cross-game page hops")
+
+    print(f"\nBacktest passed — {len(GAMES) * len(PAGES)} game/page renders plus actions")
 
 
 if __name__ == "__main__":

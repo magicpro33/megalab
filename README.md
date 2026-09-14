@@ -4,6 +4,8 @@ Streamlit app covering all six South Carolina Education Lottery terminal games: 
 
 Odds and prize tables follow current official rules (Mega Millions $5 matrix since April 2025, Palmetto Cash 5 $2 built-in multiplier since October 2025). Frequency tools describe the past only — they do not change the odds.
 
+Pick a game and a page from the **sidebar radios**. The old top dropdown/tabs combination could blank the Streamlit page when the widget tree rebuilt.
+
 ## Run locally
 
 ```bash
